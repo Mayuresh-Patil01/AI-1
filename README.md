@@ -24,33 +24,18 @@ For custom categories, each photo is matched to the category text it's most simi
 - **UI:** React · TypeScript · Vite · Tailwind CSS
 
 ## Run it locally
+Requires Python 3.12+, Node 20+ and Git (Windows).
 
-**1. Engine** (first time only: create the virtual environment and install packages)
 ```powershell
-cd engine
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+.\setup.cmd    # first time (and after pulling dependency changes)
+.\dev.cmd      # starts the engine + UI and opens http://localhost:5173
 ```
-On a PC with an NVIDIA GPU, install the CUDA build of PyTorch **before** the line above:
-```powershell
-.venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
+`setup.cmd` installs the GPU build of PyTorch automatically if the PC has an NVIDIA card.
 The first "Organize with AI" downloads the CLIP model (~600 MB, once per PC).
-Start it:
-```powershell
-cd engine
-.venv\Scripts\python -m uvicorn sortified.main:app --reload --port 8000
-```
-
-**2. UI** (in a second terminal; first time only: `npm install`)
-```powershell
-cd ui
-npm run dev
-```
-Open http://localhost:5173 and paste a folder path into the sidebar.
-
-## Working across PCs
-- **Before starting:** `git pull`
-- **When done:** `git add .` → `git commit -m "describe change"` → `git push`
 
 App data (database, thumbnail cache) lives in `~/.sortified`, separately on each PC, and is never committed.
+
+## Development
+- Workflow, branches, tests and releases: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+- What changed: [CHANGELOG.md](CHANGELOG.md) · What's next: [docs/ROADMAP.md](docs/ROADMAP.md)
+- Tests: `cd engine; .venv\Scripts\python -m pytest` — also run automatically by GitHub Actions on every push.
