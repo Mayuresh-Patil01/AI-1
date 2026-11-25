@@ -7,11 +7,47 @@ Flow: preview (nothing happens on disk) -> apply (copies + logs every file it cr
 import json
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from .db import connect
 
 UNSORTED = "Unsorted"
+
+# Folder naming templates. Use "/" to make sub-folders, e.g. "{year}/{album}" -> 2025\Beaches\photo.jpg
+TEMPLATE_TOKENS = {
+    "album": "Album name",
+    "year": "Year the photo was taken, e.g. 2025",
+    "month": "Month number, e.g. 07",
+    "month_name": "Month name, e.g. July",
+    "day": "Day of month, e.g. 04",
+    "folder": "Name of the folder the photo came from",
+}
+DEFAULT_TEMPLATE = "{album}"
+
+
+def validate_template(template: str) -> str:
+    template = template.strip().strip("/\\") or DEFAULT_TEMPLATE
+    unknown = set(re.findall(r"\{(\w*)\}", template)) - set(TEMPLATE_TOKENS)
+    if unknown:
+        raise ValueError(f"Unknown template field: {{{sorted(unknown)[0]}}}. Use: " + ", ".join(f"{{{t}}}" for t in TEMPLATE_TOKENS))
+    if "{" not in template:
+        raise ValueError("The template needs at least one field, like {album}")
+    return template
+
+
+def render_template(template: str, album: str, taken: datetime, source: Path) -> list[str]:
+    """Turn a template into a list of safe folder names (one per sub-folder level)."""
+    values = {
+        "album": album,
+        "year": f"{taken.year}",
+        "month": f"{taken.month:02d}",
+        "month_name": taken.strftime("%B"),
+        "day": f"{taken.day:02d}",
+        "folder": source.parent.name,
+    }
+    rendered = template.format(**values)
+    return [_safe(part) for part in re.split(r"[\\/]+", rendered) if part.strip()]
 
 
 def _safe(name: str) -> str:
@@ -41,12 +77,13 @@ def validate_dest(dest: str) -> Path:
     return path
 
 
-def plan(dest: str, include_unsorted: bool) -> dict:
+def plan(dest: str, include_unsorted: bool, template: str = DEFAULT_TEMPLATE) -> dict:
     root = validate_dest(dest)
+    template = validate_template(template)
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT i.id, i.path, i.size, a.name AS album
+            SELECT i.id, i.path, i.size, i.mtime, i.taken_at, a.name AS album
             FROM images i
             LEFT JOIN album_images ai ON ai.image_id = i.id
             LEFT JOIN albums a ON a.id = ai.album_id
@@ -55,13 +92,16 @@ def plan(dest: str, include_unsorted: bool) -> dict:
         ).fetchall()
 
     taken: set[str] = set()
-    items, per_album = [], {}
+    items, per_folder = [], {}
     for r in rows:
         album = r["album"] or (UNSORTED if include_unsorted else None)
         if album is None:
             continue
-        folder = root / _safe(album)
         src = Path(r["path"])
+        # Date the photo was taken (from EXIF), or else when the file was last modified.
+        when = datetime.fromisoformat(r["taken_at"]) if r["taken_at"] else datetime.fromtimestamp(r["mtime"])
+        parts = render_template(template, album, when, src)
+        folder = root.joinpath(*parts)
         dst = folder / src.name
         n = 1
         # Never overwrite: add _1, _2, ... if the name is already used (on disk or in this plan).
@@ -70,19 +110,21 @@ def plan(dest: str, include_unsorted: bool) -> dict:
             n += 1
         taken.add(str(dst).lower())
         items.append({"src": str(src), "dst": str(dst), "size": r["size"]})
-        per_album[album] = per_album.get(album, 0) + 1
+        label = "\\".join(parts)
+        per_folder[label] = per_folder.get(label, 0) + 1
 
     return {
         "dest": str(root),
+        "template": template,
         "total": len(items),
         "bytes": sum(i["size"] for i in items),
-        "folders": [{"name": k, "count": v} for k, v in sorted(per_album.items(), key=lambda kv: -kv[1])],
+        "folders": [{"name": k, "count": v} for k, v in sorted(per_folder.items(), key=lambda kv: -kv[1])],
         "items": items,
     }
 
 
-def apply(dest: str, include_unsorted: bool) -> dict:
-    p = plan(dest, include_unsorted)
+def apply(dest: str, include_unsorted: bool, template: str = DEFAULT_TEMPLATE) -> dict:
+    p = plan(dest, include_unsorted, template)
     created, failed = [], []
     for item in p["items"]:
         dst = Path(item["dst"])
@@ -102,7 +144,7 @@ def apply(dest: str, include_unsorted: bool) -> dict:
 
 def undo(export_id: int) -> dict:
     with connect() as conn:
-        row = conn.execute("SELECT files, undone FROM exports WHERE id = ?", (export_id,)).fetchone()
+        row = conn.execute("SELECT dest, files, undone FROM exports WHERE id = ?", (export_id,)).fetchone()
     if not row:
         raise ValueError("Export not found")
     if row["undone"]:
@@ -119,11 +161,16 @@ def undo(export_id: int) -> dict:
             dirs.add(path.parent)
         else:
             kept += 1
-    for d in dirs:
-        try:
-            d.rmdir()  # only succeeds if the folder is now empty
-        except OSError:
-            pass
+    # Remove folders the export created if they're now empty, walking up (e.g. 2025\Beaches, then 2025),
+    # but never above the export folder itself.
+    root = Path(row["dest"])
+    for d in sorted(dirs, key=lambda p: -len(p.parts)):
+        while d != root and _is_inside(d, root):
+            try:
+                d.rmdir()  # only succeeds if the folder is empty
+            except OSError:
+                break
+            d = d.parent
 
     with connect() as conn:
         conn.execute("UPDATE exports SET undone = 1 WHERE id = ?", (export_id,))

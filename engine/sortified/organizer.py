@@ -7,45 +7,10 @@ Two modes:
 
 import numpy as np
 
-from . import ai
+from . import ai, analysis
 from .db import connect
 from .jobs import Progress
 from .labels import ALBUM_LABELS
-
-BATCH = 32
-
-
-# ---------- step 1: make sure every image has an embedding ----------
-
-def index_missing(progress: Progress) -> int:
-    with connect() as conn:
-        todo = conn.execute(
-            """
-            SELECT i.id, i.path FROM images i
-            LEFT JOIN embeddings e ON e.image_id = i.id AND e.model = ?
-            WHERE e.image_id IS NULL
-            """,
-            (ai.MODEL_ID,),
-        ).fetchall()
-
-    if not todo:
-        return 0
-
-    if not ai.status()["loaded"]:
-        progress.phase("Loading AI model (first run downloads ~600 MB)…")
-        ai.embed_labels(["warm up"])  # triggers the load
-
-    progress.phase(f"Analyzing photos on {ai.status()['device'].upper()}", total=len(todo))
-    for start in range(0, len(todo), BATCH):
-        chunk = todo[start:start + BATCH]
-        vectors = ai.embed_images([r["path"] for r in chunk])
-        with connect() as conn:
-            conn.executemany(
-                "INSERT OR REPLACE INTO embeddings (image_id, model, vector) VALUES (?, ?, ?)",
-                [(r["id"], ai.MODEL_ID, v.tobytes()) for r, v in zip(chunk, vectors) if v is not None],
-            )
-        progress.step(len(chunk))
-    return len(todo)
 
 
 def load_embeddings() -> tuple[list[int], np.ndarray]:
@@ -121,7 +86,7 @@ def save_albums(albums: dict[str, list[tuple[int, float]]], kind: str) -> list[d
 
 
 def organize(progress: Progress, mode: str, count: int | None, categories: list[str], strictness: float) -> dict:
-    analyzed = index_missing(progress)
+    analyzed = analysis.analyze(progress)["embedded_now"]
 
     progress.phase("Building albums…")
     ids, vecs = load_embeddings()

@@ -95,6 +95,25 @@ MIGRATIONS: list[str] = [
         undone      INTEGER NOT NULL DEFAULT 0
     );
     """,
+    # 2 — v2.0: photo quality metrics for the Cleanup view
+    """
+    CREATE TABLE image_quality (
+        image_id    INTEGER PRIMARY KEY REFERENCES images(id) ON DELETE CASCADE,
+        sharpness   REAL,                   -- higher = sharper (variance of edges)
+        brightness  REAL,                   -- average brightness 0..255
+        dhash       TEXT,                   -- 64-bit "difference hash" as 16 hex chars, for near-duplicates
+        ignored     INTEGER NOT NULL DEFAULT 0  -- 1 = you marked it "keep" in Cleanup
+    );
+    """,
+    # 3 — v2.0: tiny 32x32 thumbnail to confirm near-duplicates (dHash alone mistakes screenshots for duplicates)
+    """
+    ALTER TABLE image_quality ADD COLUMN tiny BLOB;
+    """,
+    # 4 — v2.0: brightness of the brightest 1% of pixels, so dark-mode screenshots and night shots
+    #     (dark overall but with bright text/lights) aren't flagged as "too dark"
+    """
+    ALTER TABLE image_quality ADD COLUMN highlights REAL;
+    """,
 ]
 
 def schema_version() -> int:

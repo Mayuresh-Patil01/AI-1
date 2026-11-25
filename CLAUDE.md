@@ -28,7 +28,9 @@ albums with AI, finds duplicates/blurry shots, and writes organized folders — 
   Add or update tests in `engine/tests/` for engine behaviour changes. Tests use `fake_ai`; never download models in tests.
 - **Database changes: append a new entry to `MIGRATIONS` in `engine/sortified/db.py`. Never edit an existing one.**
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-visible changes.
-- Releases: bump version in both `engine/sortified/__init__.py` and `ui/package.json` (+ `npm install --package-lock-only`),
+- Releases: bump version in `engine/sortified/__init__.py` and run `npm version X.Y.Z --no-git-tag-version` in `ui/`
+  (updates package.json + lockfile). **Never use `npm install --package-lock-only`**: npm 11 drops optional
+  packages from the lockfile and CI's `npm ci` then fails.
   move changelog notes under the version, commit, `git tag -a vX.Y.Z -m "SORTIFIED vX.Y.Z"` (annotated — `--follow-tags` skips plain tags), `git push --follow-tags`.
 
 ## Ground rules

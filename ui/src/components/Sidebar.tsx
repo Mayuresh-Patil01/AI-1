@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  FolderPlus, Folder as FolderIcon, Images, Inbox, Loader2, Plus, RefreshCw, Sparkles, Trash2,
+  Eraser, FolderPlus, Folder as FolderIcon, Images, Inbox, Loader2, Plus, RefreshCw, Sparkles, Trash2,
 } from "lucide-react";
 import { api, DRAG_TYPE, type Album, type Folder, type View } from "../api";
 
@@ -63,6 +63,7 @@ export default function Sidebar(props: Props) {
       <div className="flex-1 overflow-y-auto pb-4">
         <nav className="px-3">
           <NavRow active={view.type === "all"} onClick={() => onView({ type: "all" })} icon={<Images className="size-4" />} label="All photos" count={total} />
+          <NavRow active={view.type === "cleanup"} onClick={() => onView({ type: "cleanup" })} icon={<Eraser className="size-4" />} label="Cleanup" />
         </nav>
 
         {/* ---------- Albums ---------- */}
@@ -175,7 +176,7 @@ function SectionTitle({ children, action }: { children: React.ReactNode; action?
   );
 }
 
-function NavRow(props: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count: number; muted?: boolean }) {
+function NavRow(props: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count?: number; muted?: boolean }) {
   return (
     <button
       onClick={props.onClick}
@@ -185,7 +186,7 @@ function NavRow(props: { active: boolean; onClick: () => void; icon: React.React
     >
       <span className="flex size-6 shrink-0 items-center justify-center">{props.icon}</span>
       <span className="flex-1 truncate text-left">{props.label}</span>
-      <span className="text-xs text-ink-400">{props.count.toLocaleString()}</span>
+      {props.count !== undefined && <span className="text-xs text-ink-400">{props.count.toLocaleString()}</span>}
     </button>
   );
 }
