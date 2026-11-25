@@ -37,7 +37,9 @@ Step "Python packages"
 
 Step "UI packages (ui\node_modules)"
 Push-Location ui
-npm install --no-audit --no-fund
+# `npm ci` installs exactly what package-lock.json lists and never rewrites it.
+# (`npm install` can drop optional packages from the lockfile, which breaks CI.)
+npm ci --no-audit --no-fund
 Pop-Location
 
 Write-Host "`nSetup complete. Start SORTIFIED with: .\dev.cmd" -ForegroundColor Green

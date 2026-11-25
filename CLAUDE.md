@@ -17,7 +17,8 @@ albums with AI, finds duplicates/blurry shots, and writes organized folders — 
 - Later: package as a desktop app (Tauri), installer via GitHub Releases.
 
 ## Running locally
-- `setup.cmd` — one-time/after-pull setup (venv, CUDA torch if NVIDIA, npm install).
+- `setup.cmd` — one-time/after-pull setup (venv, CUDA torch if NVIDIA, `npm ci` — never rewrites the lockfile).
+  Only run `npm install <pkg>` in `ui/` when deliberately adding/upgrading a UI dependency.
 - `dev.cmd` — starts engine (with reload) + UI and opens the browser.
 - Full workflow for the owner: `docs/DEVELOPMENT.md`.
 

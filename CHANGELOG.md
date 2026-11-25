@@ -6,6 +6,8 @@ All notable changes to SORTIFIED. Versions follow [semantic versioning](https://
 Add new entries under **Unreleased** as you work; rename it to the version number when releasing.
 
 ## [Unreleased]
+### Fixed
+- `setup.cmd` now uses `npm ci`, so it no longer rewrites `ui/package-lock.json` (which could break CI).
 
 ## [2.0.0] — 2026-11-25
 ### Added
