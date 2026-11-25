@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from . import __version__, ai, exporter, jobs, organizer
+from . import __version__, ai, analysis, cleanup, exporter, jobs, organizer, search
 from .db import connect, get_version, init_db
 from .scanner import scan_folder
 from .thumbnails import get_thumbnail
@@ -173,6 +173,59 @@ def current_job():
     return jobs.current()
 
 
+# ---------------------------------------------------------------- analysis, search, cleanup
+
+@app.get("/api/analysis")
+def analysis_status():
+    return analysis.status()
+
+
+@app.post("/api/analysis")
+def start_analysis():
+    try:
+        return jobs.start("analyze", analysis.analyze)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/api/search")
+def search_photos(q: str, limit: int = 100):
+    if not q.strip():
+        raise HTTPException(400, "Type something to search for")
+    return {**search.search(q.strip(), limit), **analysis.status()}
+
+
+class ImageIdsBody(BaseModel):
+    image_ids: list[int]
+
+
+@app.get("/api/cleanup/duplicates")
+def cleanup_duplicates():
+    return cleanup.find_duplicates()
+
+
+@app.get("/api/cleanup/blurry")
+def cleanup_blurry(threshold: float = cleanup.DEFAULT_BLUR_THRESHOLD):
+    return {"items": cleanup.find_blurry(threshold), "threshold": threshold}
+
+
+@app.get("/api/cleanup/dark")
+def cleanup_dark(threshold: float = cleanup.DEFAULT_DARK_THRESHOLD):
+    return {"items": cleanup.find_dark(threshold), "threshold": threshold}
+
+
+@app.post("/api/cleanup/keep")
+def cleanup_keep(req: ImageIdsBody):
+    """Mark photos as reviewed so Cleanup stops suggesting them."""
+    return {"kept": cleanup.ignore(req.image_ids)}
+
+
+@app.post("/api/cleanup/trash")
+def cleanup_trash(req: ImageIdsBody):
+    """Move photos to the Recycle Bin (recoverable) and remove them from the library."""
+    return cleanup.trash(req.image_ids)
+
+
 # ---------------------------------------------------------------- albums
 
 class AlbumName(BaseModel):
@@ -250,12 +303,18 @@ def unassign(req: ImageIds):
 class ExportRequest(BaseModel):
     dest: str
     include_unsorted: bool = False
+    template: str = exporter.DEFAULT_TEMPLATE
+
+
+@app.get("/api/export/template-fields")
+def export_template_fields():
+    return exporter.TEMPLATE_TOKENS
 
 
 @app.post("/api/export/preview")
 def export_preview(req: ExportRequest):
     try:
-        p = exporter.plan(req.dest, req.include_unsorted)
+        p = exporter.plan(req.dest, req.include_unsorted, req.template)
     except ValueError as e:
         raise HTTPException(400, str(e))
     p["sample"] = p.pop("items")[:8]
@@ -265,7 +324,7 @@ def export_preview(req: ExportRequest):
 @app.post("/api/export/apply")
 def export_apply(req: ExportRequest):
     try:
-        return exporter.apply(req.dest, req.include_unsorted)
+        return exporter.apply(req.dest, req.include_unsorted, req.template)
     except ValueError as e:
         raise HTTPException(400, str(e))
 

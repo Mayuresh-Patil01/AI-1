@@ -95,6 +95,16 @@ MIGRATIONS: list[str] = [
         undone      INTEGER NOT NULL DEFAULT 0
     );
     """,
+    # 2 — v2.0: photo quality metrics for the Cleanup view
+    """
+    CREATE TABLE image_quality (
+        image_id    INTEGER PRIMARY KEY REFERENCES images(id) ON DELETE CASCADE,
+        sharpness   REAL,                   -- higher = sharper (variance of edges)
+        brightness  REAL,                   -- average brightness 0..255
+        dhash       TEXT,                   -- 64-bit "difference hash" as 16 hex chars, for near-duplicates
+        ignored     INTEGER NOT NULL DEFAULT 0  -- 1 = you marked it "keep" in Cleanup
+    );
+    """,
 ]
 
 def schema_version() -> int:
