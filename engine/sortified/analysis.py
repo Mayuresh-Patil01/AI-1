@@ -10,32 +10,45 @@ from .jobs import Progress
 
 BATCH = 32
 
+# A photo needs (re)measuring if it has no quality row, or one written by an older version that
+# didn't store every metric yet. Add new columns here when a migration adds a metric.
+NEEDS_MEASURING = "q.tiny IS NULL OR q.highlights IS NULL"
+
 
 def status() -> dict:
     with connect() as conn:
         total = conn.execute("SELECT COUNT(*) FROM images").fetchone()[0]
         embedded = conn.execute("SELECT COUNT(*) FROM embeddings WHERE model = ?", (ai.MODEL_ID,)).fetchone()[0]
-        measured = conn.execute("SELECT COUNT(*) FROM image_quality").fetchone()[0]
+        measured = conn.execute(f"SELECT COUNT(*) FROM image_quality q WHERE NOT ({NEEDS_MEASURING})").fetchone()[0]
     return {"total": total, "embedded": embedded, "measured": measured, "pending": total - min(embedded, measured)}
 
 
 def measure_missing(progress: Progress) -> int:
     with connect() as conn:
         todo = conn.execute(
-            "SELECT i.id, i.path FROM images i LEFT JOIN image_quality q ON q.image_id = i.id WHERE q.image_id IS NULL"
+            f"SELECT i.id, i.path FROM images i LEFT JOIN image_quality q ON q.image_id = i.id WHERE {NEEDS_MEASURING}"
         ).fetchall()
     if not todo:
         return 0
 
     progress.phase("Checking photo quality", total=len(todo))
+    # Unreadable files get empty (not NULL) values so they aren't retried on every run.
+    unreadable = {"sharpness": None, "brightness": None, "highlights": -1.0, "dhash": None, "tiny": b""}
     for start in range(0, len(todo), BATCH):
         rows = []
         for r in todo[start:start + BATCH]:
-            m = quality.measure(r["path"]) or {"sharpness": None, "brightness": None, "dhash": None}
-            rows.append((r["id"], m["sharpness"], m["brightness"], m["dhash"]))
+            m = quality.measure(r["path"]) or unreadable
+            rows.append((r["id"], m["sharpness"], m["brightness"], m["highlights"], m["dhash"], m["tiny"]))
         with connect() as conn:
+            # Upsert that keeps the "ignored" flag you may have set earlier.
             conn.executemany(
-                "INSERT OR REPLACE INTO image_quality (image_id, sharpness, brightness, dhash) VALUES (?, ?, ?, ?)", rows
+                """
+                INSERT INTO image_quality (image_id, sharpness, brightness, highlights, dhash, tiny)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(image_id) DO UPDATE SET sharpness = excluded.sharpness, brightness = excluded.brightness,
+                    highlights = excluded.highlights, dhash = excluded.dhash, tiny = excluded.tiny
+                """,
+                rows,
             )
         progress.step(len(rows))
     return len(todo)

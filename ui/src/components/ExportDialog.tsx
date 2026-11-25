@@ -3,9 +3,18 @@ import { CheckCircle2, FolderOutput, Loader2, Undo2 } from "lucide-react";
 import { api, formatBytes, type ExportPreview, type ExportResult } from "../api";
 import Modal, { GhostButton, PrimaryButton } from "./Modal";
 
+const PRESETS = [
+  { template: "{album}", example: "Beaches\\photo.jpg" },
+  { template: "{year}/{album}", example: "2025\\Beaches\\photo.jpg" },
+  { template: "{album}/{year}", example: "Beaches\\2025\\photo.jpg" },
+  { template: "{year}/{month} - {month_name}/{album}", example: "2025\\07 - July\\Beaches\\photo.jpg" },
+];
+
 export default function ExportDialog({ onClose }: { onClose: () => void }) {
   const [dest, setDest] = useState("");
   const [includeUnsorted, setIncludeUnsorted] = useState(false);
+  const [template, setTemplate] = useState("{album}");
+  const [custom, setCustom] = useState(false);
   const [preview, setPreview] = useState<ExportPreview | null>(null);
   const [result, setResult] = useState<ExportResult | null>(null);
   const [undone, setUndone] = useState<{ removed: number; kept: number } | null>(null);
@@ -82,6 +91,45 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
             Also copy Unsorted photos into an "Unsorted" folder
           </label>
 
+          <label className="mt-5 block text-sm text-ink-300">Folder structure</label>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {PRESETS.map((p) => (
+              <button
+                key={p.template}
+                onClick={() => {
+                  setTemplate(p.template);
+                  setCustom(false);
+                  resetPreview();
+                }}
+                className={`rounded-lg px-3 py-2 text-left ring-1 transition ${
+                  !custom && template === p.template ? "bg-brand-500/10 ring-brand-400" : "bg-ink-800 ring-ink-700 hover:ring-ink-600"
+                }`}
+              >
+                <div className="font-mono text-xs">{p.template}</div>
+                <div className="mt-0.5 truncate text-[11px] text-ink-400">{p.example}</div>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setCustom(!custom)} className="mt-2 text-xs text-ink-400 hover:text-white">
+            {custom ? "▾" : "▸"} Custom template
+          </button>
+          {custom && (
+            <div className="mt-2">
+              <input
+                value={template}
+                onChange={(e) => {
+                  setTemplate(e.target.value);
+                  resetPreview();
+                }}
+                className="w-full rounded-lg border border-ink-600 bg-ink-800 px-3 py-2 font-mono text-sm focus:border-brand-400 focus:outline-none"
+              />
+              <p className="mt-1.5 text-[11px] text-ink-400">
+                Fields: {"{album} {year} {month} {month_name} {day} {folder}"}. Use / for sub-folders. The date is when the photo was taken
+                (or last modified).
+              </p>
+            </div>
+          )}
+
           {preview && (
             <div className="mt-5 rounded-xl bg-ink-950/60 p-4 ring-1 ring-ink-700">
               <div className="flex items-baseline justify-between">
@@ -113,12 +161,12 @@ export default function ExportDialog({ onClose }: { onClose: () => void }) {
           <div className="mt-6 flex justify-end gap-2">
             <GhostButton onClick={onClose}>Cancel</GhostButton>
             {preview ? (
-              <PrimaryButton disabled={busy || preview.total === 0} onClick={() => run(() => api.exportApply(dest, includeUnsorted), setResult)}>
+              <PrimaryButton disabled={busy || preview.total === 0} onClick={() => run(() => api.exportApply(dest, includeUnsorted, template), setResult)}>
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <FolderOutput className="size-4" />}
                 Copy {preview.total.toLocaleString()} photos
               </PrimaryButton>
             ) : (
-              <PrimaryButton disabled={busy || !dest.trim()} onClick={() => run(() => api.exportPreview(dest, includeUnsorted), setPreview)}>
+              <PrimaryButton disabled={busy || !dest.trim()} onClick={() => run(() => api.exportPreview(dest, includeUnsorted, template), setPreview)}>
                 {busy && <Loader2 className="size-4 animate-spin" />} Preview
               </PrimaryButton>
             )}

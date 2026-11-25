@@ -48,11 +48,32 @@ def dhash(gray: np.ndarray) -> str:
     return f"{value:016x}"
 
 
+TINY = 32
+
+
+def tiny(gray: np.ndarray) -> np.ndarray:
+    """A 32x32 version of the photo, normalized so a dot product of two of them = their correlation (-1..1).
+
+    Real duplicates (resized, re-compressed, slightly blurred) correlate > 0.9. Different screenshots or
+    documents with the same layout don't, even though their dHash can be identical.
+    """
+    small = np.asarray(Image.fromarray(gray.astype(np.uint8)).resize((TINY, TINY), Image.Resampling.BOX), dtype=np.float32)
+    small = small.flatten() - small.mean()
+    norm = np.linalg.norm(small)
+    return (small / norm if norm > 1e-3 else np.zeros_like(small)).astype(np.float16)
+
+
 def measure(path: str) -> dict | None:
     gray = _gray(path)
     if gray is None:
         return None
-    return {"sharpness": sharpness(gray), "brightness": float(gray.mean()), "dhash": dhash(gray)}
+    return {
+        "sharpness": sharpness(gray),
+        "brightness": float(gray.mean()),
+        "highlights": float(np.percentile(gray, 99)),  # how bright the brightest 1% of the photo is
+        "dhash": dhash(gray),
+        "tiny": tiny(gray).tobytes(),
+    }
 
 
 def hamming(a: str, b: str) -> int:

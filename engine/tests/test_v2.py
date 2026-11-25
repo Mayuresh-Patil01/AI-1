@@ -23,10 +23,17 @@ def analyze(client):
     return job["result"]
 
 
-def noisy(size=(320, 240), seed=0) -> Image.Image:
-    """A detailed, sharp image (random texture)."""
+def noisy(size=(640, 480), seed=0) -> Image.Image:
+    """A detailed, sharp 'photo': lots of overlapping shapes with hard edges, different for each seed."""
+    from PIL import ImageDraw
+
     rng = np.random.default_rng(seed)
-    return Image.fromarray(rng.integers(0, 255, (size[1], size[0], 3), dtype=np.uint8))
+    img = Image.new("RGB", size, tuple(int(c) for c in rng.integers(40, 200, 3)))
+    d = ImageDraw.Draw(img)
+    for _ in range(40):
+        x, y, s = int(rng.integers(0, size[0])), int(rng.integers(0, size[1])), int(rng.integers(15, 120))
+        d.rectangle([x, y, x + s, y + s], fill=tuple(int(c) for c in rng.integers(0, 255, 3)), outline="black", width=3)
+    return img
 
 
 @pytest.fixture
@@ -81,6 +88,52 @@ def test_finds_exact_and_resized_duplicates_and_keeps_the_biggest(client, messy,
     assert groups[0]["kind"] == "similar"  # the resized one isn't byte-identical
     keep = next(i for i in groups[0]["images"] if i["id"] == groups[0]["keep_id"])
     assert keep["name"] in {"original.png", "original_copy.png"}  # full resolution wins over the small copy
+
+
+def screenshot(seed: int) -> Image.Image:
+    """A dark 'code editor' screenshot: same layout every time, different text."""
+    from PIL import ImageDraw, ImageFont
+
+    rng = np.random.default_rng(seed)
+    font = ImageFont.load_default(size=22)  # like a normal code editor font
+    words = ["def", "return", "import", "self", "for", "in", "if", "print", "data", "model"]
+    img = Image.new("RGB", (1600, 1000), (30, 31, 40))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, 1600, 40], fill=(45, 46, 58))  # title bar
+    for row in range(28):
+        x = 60 + 30 * int(rng.integers(0, 4))
+        for _ in range(int(rng.integers(2, 7))):
+            word = str(rng.choice(words))
+            d.text((x, 70 + row * 32), word, fill=tuple(int(c) for c in rng.integers(90, 230, 3)), font=font)
+            x += len(word) * 13 + 14
+    return img
+
+
+def test_screenshots_with_same_layout_are_not_duplicates(client, tmp_path, fake_ai):
+    """Regression: different screenshots used to be grouped because their dHash is nearly identical."""
+    root = tmp_path / "shots"
+    root.mkdir()
+    for i in range(5):
+        screenshot(i).save(root / f"shot_{i}.png")
+    screenshot(0).resize((400, 250)).save(root / "shot_0_small.png")  # one real duplicate
+    add(client, root)
+    analyze(client)
+
+    groups = client.get("/api/cleanup/duplicates").json()["groups"]
+    assert [sorted(i["name"] for i in g["images"]) for g in groups] == [["shot_0.png", "shot_0_small.png"]]
+
+
+def test_dark_mode_screenshots_are_not_too_dark(client, tmp_path, fake_ai):
+    """Regression: dark-themed screenshots were listed as 'too dark' next to real pocket photos."""
+    root = tmp_path / "dark"
+    root.mkdir()
+    screenshot(1).save(root / "dark_mode.png")
+    Image.fromarray((np.asarray(noisy(seed=3)) * 0.06).astype(np.uint8)).save(root / "pocket.png")
+    add(client, root)
+    analyze(client)
+    # Even with a generous threshold, only the featureless photo counts as too dark.
+    items = client.get("/api/cleanup/dark", params={"threshold": 60}).json()["items"]
+    assert [i["name"] for i in items] == ["pocket.png"]
 
 
 def test_exact_copies_only(client, tmp_path, fake_ai):

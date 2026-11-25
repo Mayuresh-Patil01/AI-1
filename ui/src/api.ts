@@ -21,12 +21,13 @@ export type ScanResult = { added: number; updated: number; unchanged: number; re
 
 export type Job = {
   id: number;
-  name: string;
+  name: "organize" | "analyze";
   state: "running" | "done" | "error";
   phase: string;
   done: number;
   total: number;
   error: string | null;
+  // organize jobs return album info; analyze jobs return analysis counts
   result: { analyzed: number; placed: number; unsorted: number; albums: { name: string; count: number }[] } | null;
 };
 
@@ -49,7 +50,15 @@ export type View =
   | { type: "all" }
   | { type: "folder"; id: number }
   | { type: "album"; id: number }
-  | { type: "unsorted" };
+  | { type: "unsorted" }
+  | { type: "search"; q: string }
+  | { type: "cleanup" };
+
+export type AnalysisStatus = { total: number; embedded: number; measured: number; pending: number };
+
+export type CleanupImage = ImageItem & { sharpness: number | null; brightness: number | null };
+
+export type DuplicateGroup = { kind: "exact" | "similar"; keep_id: number; images: CleanupImage[]; reclaimable: number };
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -95,11 +104,28 @@ export const api = {
   moveToAlbum: (albumId: number, imageIds: number[]) => post(`/api/albums/${albumId}/images`, { image_ids: imageIds }),
   unassign: (imageIds: number[]) => post("/api/albums/unassign", { image_ids: imageIds }),
 
-  exportPreview: (dest: string, includeUnsorted: boolean) =>
-    post<ExportPreview>("/api/export/preview", { dest, include_unsorted: includeUnsorted }),
-  exportApply: (dest: string, includeUnsorted: boolean) =>
-    post<ExportResult>("/api/export/apply", { dest, include_unsorted: includeUnsorted }),
+  exportTemplateFields: () => request<Record<string, string>>("/api/export/template-fields"),
+  exportPreview: (dest: string, includeUnsorted: boolean, template: string) =>
+    post<ExportPreview>("/api/export/preview", { dest, include_unsorted: includeUnsorted, template }),
+  exportApply: (dest: string, includeUnsorted: boolean, template: string) =>
+    post<ExportResult>("/api/export/apply", { dest, include_unsorted: includeUnsorted, template }),
   exportUndo: (id: number) => post<{ removed: number; kept: number }>(`/api/export/${id}/undo`),
+
+  analysisStatus: () => request<AnalysisStatus>("/api/analysis"),
+  analyze: () => post<Job>("/api/analysis"),
+  search: (q: string) =>
+    request<AnalysisStatus & { items: (ImageItem & { score: number })[]; searched: number }>(
+      `/api/search?${new URLSearchParams({ q })}`,
+    ),
+
+  duplicates: () => request<{ groups: DuplicateGroup[]; reclaimable: number }>("/api/cleanup/duplicates"),
+  blurry: (threshold: number) => request<{ items: CleanupImage[] }>(`/api/cleanup/blurry?threshold=${threshold}`),
+  dark: (threshold: number) => request<{ items: CleanupImage[] }>(`/api/cleanup/dark?threshold=${threshold}`),
+  keep: (imageIds: number[]) => post("/api/cleanup/keep", { image_ids: imageIds }),
+  trash: (imageIds: number[]) =>
+    post<{ trashed: number; freed: number; failed: { path: string; error: string }[] }>("/api/cleanup/trash", {
+      image_ids: imageIds,
+    }),
 };
 
 /** Drag-and-drop payload type for moving photos onto albums. */

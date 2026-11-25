@@ -17,13 +17,15 @@
 - [ ] Native folder picker (comes with the Tauri desktop app)
 - [ ] Keep hand-moved photos when re-organizing
 
-## v2 — Cleanup & control
-- [ ] Exact + near-duplicate detection, keep-the-best suggestion
-- [ ] Blurry / dark / accidental photo detection
-- [ ] Screenshots, memes, documents separated from photos
-- [ ] Natural-language search ("red car at night")
-- [ ] Folder naming templates: `{year}/{month}/{album}`
-- [ ] Copy / move / virtual-album modes
+## v2 — Cleanup & control ✅
+- [x] Exact + near-duplicate detection, keep-the-best suggestion
+- [x] Blurry / dark photo detection, Keep or move to Recycle Bin
+- [x] Natural-language search ("red car at night")
+- [x] Folder naming templates: `{year}/{month}/{album}`
+
+### Moved to later
+- [ ] Screenshots, memes, documents separated from photos (custom categories cover most of this today)
+- [ ] Move mode for export (copy-only for now, which is safer)
 
 ## v3 — Smart albums
 - [ ] People albums (face clustering, name once)
