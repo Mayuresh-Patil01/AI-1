@@ -62,7 +62,7 @@ On startup, every PC's library upgrades itself and keeps a backup (`library.v1.b
 3. Commit, then tag and push:
    ```powershell
    git commit -am "Release v1.2.0"
-   git tag v1.2.0
+   git tag -a v1.2.0 -m "SORTIFIED v1.2.0"
    git push --follow-tags
    ```
 Tags show up under *Releases* on GitHub, so you can always go back to any version.

@@ -29,7 +29,7 @@ albums with AI, finds duplicates/blurry shots, and writes organized folders — 
 - **Database changes: append a new entry to `MIGRATIONS` in `engine/sortified/db.py`. Never edit an existing one.**
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-visible changes.
 - Releases: bump version in both `engine/sortified/__init__.py` and `ui/package.json` (+ `npm install --package-lock-only`),
-  move changelog notes under the version, commit, `git tag vX.Y.Z`, `git push --follow-tags`.
+  move changelog notes under the version, commit, `git tag -a vX.Y.Z -m "SORTIFIED vX.Y.Z"` (annotated — `--follow-tags` skips plain tags), `git push --follow-tags`.
 
 ## Ground rules
 - **Never modify or delete the user's original photos** without an explicit preview + confirmation.
