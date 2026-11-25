@@ -18,6 +18,7 @@ env/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 
 # AI/ML artifacts (large files - don't commit)
 *.ckpt
