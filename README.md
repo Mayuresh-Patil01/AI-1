@@ -6,8 +6,21 @@ and writes neatly organized folders — your photos never leave your machine.
 
 > 🚧 Early development — see [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## Features (v1)
+- **Organize with AI — auto-discover:** groups similar photos and names each album ("Sunsets", "Documents", …)
+- **Organize with AI — your categories:** type "Family, Food, Receipts" and the AI fills them; unclear photos go to *Unsorted*
+- Rename, create and delete albums; select photos (Ctrl/Shift-click) and drag them onto any album
+- **Export** albums as real folders — copies only, with a preview first and one-click **undo**
+- Runs offline on CPU; uses an NVIDIA GPU automatically when available
+
+## How the AI works
+SORTIFIED uses [CLIP](https://github.com/mlfoundations/open_clip), a model that maps images and text
+into the same vector space. Similar photos get similar vectors, so **k-means clustering** finds natural
+groups, and comparing a group's centre with ~120 label phrases ("a photo of sunsets") names it.
+For custom categories, each photo is matched to the category text it's most similar to (zero-shot classification).
+
 ## Stack
-- **Engine:** Python · FastAPI · SQLite · Pillow (AI: CLIP/SigLIP, coming in v1)
+- **Engine:** Python · FastAPI · SQLite · PyTorch · OpenCLIP · scikit-learn
 - **UI:** React · TypeScript · Vite · Tailwind CSS
 
 ## Run it locally
@@ -18,6 +31,11 @@ cd engine
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```
+On a PC with an NVIDIA GPU, install the CUDA build of PyTorch **before** the line above:
+```powershell
+.venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+The first "Organize with AI" downloads the CLIP model (~600 MB, once per PC).
 Start it:
 ```powershell
 cd engine

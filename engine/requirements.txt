@@ -2,3 +2,12 @@ fastapi>=0.115
 uvicorn[standard]>=0.32
 pillow>=11.0
 pillow-heif>=0.20   # opens iPhone .HEIC photos
+
+# --- AI ---
+# On a PC with an NVIDIA GPU, install the CUDA build of torch FIRST, e.g.:
+#   .venv\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu126
+# then install this file. Without that, pip installs the CPU-only build (works everywhere).
+torch>=2.6
+open_clip_torch>=2.29
+numpy>=2.0
+scikit-learn>=1.5

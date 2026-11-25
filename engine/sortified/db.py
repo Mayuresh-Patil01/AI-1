@@ -24,6 +24,38 @@ CREATE TABLE IF NOT EXISTS images (
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_folder ON images(folder_id);
+
+-- AI "fingerprint" of each image (CLIP embedding), stored as raw float32 bytes.
+CREATE TABLE IF NOT EXISTS embeddings (
+    image_id    INTEGER PRIMARY KEY REFERENCES images(id) ON DELETE CASCADE,
+    model       TEXT NOT NULL,
+    vector      BLOB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS albums (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL,          -- 'auto' (discovered), 'custom' (your category), 'manual'
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Which album each image is in. An image is in at most one album.
+CREATE TABLE IF NOT EXISTS album_images (
+    image_id    INTEGER PRIMARY KEY REFERENCES images(id) ON DELETE CASCADE,
+    album_id    INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+    score       REAL,                   -- how confident the AI was (NULL if you placed it)
+    source      TEXT NOT NULL           -- 'ai' or 'user'
+);
+CREATE INDEX IF NOT EXISTS idx_album_images_album ON album_images(album_id);
+
+-- Every export is logged so it can be undone.
+CREATE TABLE IF NOT EXISTS exports (
+    id          INTEGER PRIMARY KEY,
+    dest        TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    files       TEXT NOT NULL,          -- JSON list of {"dst": ..., "size": ...} we created
+    undone      INTEGER NOT NULL DEFAULT 0
+);
 """
 
 

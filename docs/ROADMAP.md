@@ -1,16 +1,21 @@
 # SORTIFIED Roadmap
 
-## v0.1 — Foundation ✅ (in progress)
+## v0.1 — Foundation ✅
 - [x] Repo, engine + UI skeletons
 - [x] Add a folder → list its images with thumbnails in a grid
 
-## v1 — First working product
-- [ ] AI image embeddings (CLIP/SigLIP, CPU or CUDA)
-- [ ] Auto-discover albums (clustering) with AI-suggested names
-- [ ] Custom categories ("pets, receipts, cars") via zero-shot matching
-- [ ] Album view in the UI, move photos between albums by drag-and-drop
-- [ ] Export albums to folders (copy) with a preview step + undo log
-- [ ] Incremental rescans (only new/changed files)
+## v1 — First working product ✅
+- [x] AI image embeddings (CLIP ViT-B/32, CPU or CUDA)
+- [x] Auto-discover albums (k-means clustering) with AI-suggested names
+- [x] Custom categories ("pets, receipts, cars") via zero-shot matching + strictness
+- [x] Album view, rename/delete/create albums, multi-select, drag-and-drop to move
+- [x] Export albums to folders (copy) with a preview step + undo log
+- [x] Incremental rescans (only new/changed files, stale embeddings dropped)
+
+### v1 polish ideas
+- [ ] Progress for model download, cancel button for long jobs
+- [ ] Native folder picker (comes with the Tauri desktop app)
+- [ ] Keep hand-moved photos when re-organizing
 
 ## v2 — Cleanup & control
 - [ ] Exact + near-duplicate detection, keep-the-best suggestion
