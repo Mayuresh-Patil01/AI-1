@@ -18,5 +18,9 @@ IMAGE_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff", ".heic", ".heif",
 }
 
+# CLIP model used to "understand" photos. Weights download once (~600 MB) to the Hugging Face cache.
+CLIP_MODEL = os.environ.get("SORTIFIED_CLIP_MODEL", "ViT-B-32")
+CLIP_PRETRAINED = os.environ.get("SORTIFIED_CLIP_PRETRAINED", "laion2b_s34b_b79k")
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 THUMB_DIR.mkdir(parents=True, exist_ok=True)

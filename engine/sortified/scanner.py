@@ -70,6 +70,8 @@ def scan_folder(folder_id: int, folder_path: str) -> dict:
             )
             if path in known:
                 updated += 1
+                # The photo changed, so its old AI fingerprint is stale.
+                conn.execute("DELETE FROM embeddings WHERE image_id = (SELECT id FROM images WHERE path = ?)", (path,))
             else:
                 added += 1
 
