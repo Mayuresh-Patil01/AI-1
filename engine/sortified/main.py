@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, ai, exporter, jobs, organizer
-from .db import connect, init_db
+from .db import connect, get_version, init_db
 from .scanner import scan_folder
 from .thumbnails import get_thumbnail
 
@@ -33,7 +33,7 @@ init_db()
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "version": __version__, "ai": ai.status()}
+    return {"status": "ok", "version": __version__, "schema": get_version(), "ai": ai.status()}
 
 
 # ---------------------------------------------------------------- folders

@@ -17,12 +17,19 @@ albums with AI, finds duplicates/blurry shots, and writes organized folders — 
 - Later: package as a desktop app (Tauri), installer via GitHub Releases.
 
 ## Running locally
-```powershell
-# engine (first time: python -m venv .venv; .venv\Scripts\pip install -r requirements.txt)
-cd engine; .venv\Scripts\python -m uvicorn sortified.main:app --reload --port 8000
-# ui (first time: npm install)
-cd ui; npm run dev
-```
+- `setup.cmd` — one-time/after-pull setup (venv, CUDA torch if NVIDIA, npm install).
+- `dev.cmd` — starts engine (with reload) + UI and opens the browser.
+- Full workflow for the owner: `docs/DEVELOPMENT.md`.
+
+## Change workflow (follow for every change)
+- `git pull` first. Small fixes may go straight to `main`; features go on `feature/<name>` or `fix/<name>`
+  branches and merge via Pull Request once CI is green.
+- Run `engine\.venv\Scripts\python -m pytest` (from `engine/`) and `npm run build` (from `ui/`) before committing.
+  Add or update tests in `engine/tests/` for engine behaviour changes. Tests use `fake_ai`; never download models in tests.
+- **Database changes: append a new entry to `MIGRATIONS` in `engine/sortified/db.py`. Never edit an existing one.**
+- Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-visible changes.
+- Releases: bump version in both `engine/sortified/__init__.py` and `ui/package.json` (+ `npm install --package-lock-only`),
+  move changelog notes under the version, commit, `git tag vX.Y.Z`, `git push --follow-tags`.
 
 ## Ground rules
 - **Never modify or delete the user's original photos** without an explicit preview + confirmation.
