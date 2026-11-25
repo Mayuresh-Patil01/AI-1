@@ -57,8 +57,12 @@ On startup, every PC's library upgrades itself and keeps a backup (`library.v1.b
 
 ## Releasing a version
 1. Move the **Unreleased** notes in `CHANGELOG.md` under a new version heading.
-2. Update the version in **both** `engine/sortified/__init__.py` and `ui/package.json`
-   (a test fails if they differ).
+2. Update the version in **both** places (a test fails if they differ):
+   - `engine/sortified/__init__.py`: edit `__version__`
+   - the UI: `cd ui; npm version 1.2.0 --no-git-tag-version` (updates package.json and the lockfile)
+
+   Don't use `npm install --package-lock-only` for this: it can drop optional packages from the
+   lockfile, and GitHub's `npm ci` then fails.
 3. Commit, then tag and push:
    ```powershell
    git commit -am "Release v1.2.0"
