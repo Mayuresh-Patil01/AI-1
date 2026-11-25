@@ -10,14 +10,24 @@ and writes neatly organized folders — your photos never leave your machine.
 - **Organize with AI — auto-discover:** groups similar photos and names each album ("Sunsets", "Documents", …)
 - **Organize with AI — your categories:** type "Family, Food, Receipts" and the AI fills them; unclear photos go to *Unsorted*
 - Rename, create and delete albums; select photos (Ctrl/Shift-click) and drag them onto any album
-- **Export** albums as real folders — copies only, with a preview first and one-click **undo**
+- **Search** by description: "sunset over the sea", "handwritten notes", "people at a party"
+- **Cleanup:** find duplicates (including resized copies), blurry and too-dark photos; keep them or
+  move them to the Recycle Bin to free space
+- **Export** albums as real folders: copies only, custom folder structures like `{year}/{album}`,
+  a preview first and one-click **undo**
 - Runs offline on CPU; uses an NVIDIA GPU automatically when available
 
 ## How the AI works
 SORTIFIED uses [CLIP](https://github.com/mlfoundations/open_clip), a model that maps images and text
 into the same vector space. Similar photos get similar vectors, so **k-means clustering** finds natural
 groups, and comparing a group's centre with ~120 label phrases ("a photo of sunsets") names it.
-For custom categories, each photo is matched to the category text it's most similar to (zero-shot classification).
+For custom categories, each photo is matched to the category text it's most similar to (zero-shot classification),
+and search works the same way with your query as the text.
+
+Cleanup uses classic image processing: **variance of the Laplacian** for blur, brightness percentiles for
+dark photos, and a **difference hash (dHash)** to find duplicate candidates quickly. Each candidate is then
+confirmed by correlating tiny 32×32 versions of the two photos, which stops screenshots that share a layout
+from being mistaken for duplicates.
 
 ## Stack
 - **Engine:** Python · FastAPI · SQLite · PyTorch · OpenCLIP · scikit-learn

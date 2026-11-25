@@ -9,17 +9,21 @@ from pathlib import Path
 
 import numpy as np
 
-from . import ai
 from .db import connect
 
-# Two photos are near-duplicates if their difference hashes are this close (out of 64 bits)…
-DHASH_SAME = 5
-# …or if the hashes are fairly close AND the AI thinks the content is nearly identical (burst shots).
+# Near-duplicates are found in two steps:
+#  1. fast filter: difference hashes within DHASH_LOOSE bits (out of 64) -> "might be the same photo"
+#  2. confirm: the 32x32 versions correlate at least TINY_SAME -> "really is the same photo"
+# Step 2 matters: screenshots or documents with the same layout often share a dHash but aren't duplicates.
+DHASH_SAME = 5          # used by tests as "clearly the same hash"
 DHASH_LOOSE = 12
-CLIP_SAME = 0.95
+TINY_SAME = 0.96        # real copies score ~0.99; different screenshots sharing a layout reach ~0.91
 
 DEFAULT_BLUR_THRESHOLD = 60.0
-DEFAULT_DARK_THRESHOLD = 35.0
+DEFAULT_DARK_THRESHOLD = 25.0
+# "Too dark" means dark everywhere (pocket shots, lens cap). Dark-mode screenshots and night photos
+# are dark on average but have bright text or lights, so their brightest 1% is well above this.
+DARK_MAX_HIGHLIGHTS = 70.0
 
 IMAGE_COLUMNS = "i.id, i.folder_id, i.path, i.size, i.width, i.height, i.taken_at, q.sharpness, q.brightness"
 
@@ -66,13 +70,10 @@ def _candidates() -> list[dict]:
     with connect() as conn:
         rows = conn.execute(
             f"""
-            SELECT {IMAGE_COLUMNS}, q.dhash, e.vector
-            FROM images i
-            LEFT JOIN image_quality q ON q.image_id = i.id
-            LEFT JOIN embeddings e ON e.image_id = i.id AND e.model = ?
+            SELECT {IMAGE_COLUMNS}, q.dhash, q.tiny
+            FROM images i LEFT JOIN image_quality q ON q.image_id = i.id
             WHERE COALESCE(q.ignored, 0) = 0
-            """,
-            (ai.MODEL_ID,),
+            """
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -99,20 +100,20 @@ def find_duplicates() -> dict:
                 uf.union(ids[0], other)
                 exact_pairs.add((min(ids[0], other), max(ids[0], other)))
 
-    # 2) Near-duplicates: compare perceptual hashes of every pair (vectorised, in chunks).
-    hashed = [img for img in images if img["dhash"]]
+    # 2) Near-duplicates: dHash filter on every pair (vectorised, in chunks), then confirm with the tiny images.
+    hashed = [img for img in images if img["dhash"] and img["tiny"]]
     if len(hashed) > 1:
         values = np.array([int(img["dhash"], 16) for img in hashed], dtype=np.uint64)
+        tinies = np.stack([np.frombuffer(img["tiny"], dtype=np.float16).astype(np.float32) for img in hashed])
         for start in range(0, len(hashed), 1000):
-            block = values[start:start + 1000, None] ^ values[None, :]
-            dist = np.bitwise_count(block)
-            for a, b in zip(*np.nonzero(dist <= DHASH_LOOSE)):
-                i, j = start + a, b
-                if i >= j:
-                    continue
-                x, y = hashed[i], hashed[j]
-                if dist[a, b] <= DHASH_SAME or _clip_similarity(x, y) >= CLIP_SAME:
-                    uf.union(x["id"], y["id"])
+            dist = np.bitwise_count(values[start:start + 1000, None] ^ values[None, :])
+            rows, cols = np.nonzero(dist <= DHASH_LOOSE)
+            rows = rows + start
+            keep = rows < cols  # each pair once, skip self-pairs
+            rows, cols = rows[keep], cols[keep]
+            correlation = np.einsum("ij,ij->i", tinies[rows], tinies[cols])
+            for i, j in zip(rows[correlation >= TINY_SAME], cols[correlation >= TINY_SAME]):
+                uf.union(hashed[i]["id"], hashed[j]["id"])
 
     groups = []
     for ids in uf.groups():
@@ -121,7 +122,7 @@ def find_duplicates() -> dict:
         all_exact = all((min(best["id"], m["id"]), max(best["id"], m["id"])) in exact_pairs for m in members if m is not best)
         members.sort(key=lambda m: m is not best)  # best first
         for m in members:
-            m.pop("vector", None)
+            m.pop("tiny", None)
             m.pop("dhash", None)
             m["name"] = Path(m["path"]).name
         groups.append({
@@ -135,21 +136,18 @@ def find_duplicates() -> dict:
     return {"groups": groups, "reclaimable": sum(g["reclaimable"] for g in groups)}
 
 
-def _clip_similarity(a: dict, b: dict) -> float:
-    if not a["vector"] or not b["vector"]:
-        return 0.0
-    return float(np.frombuffer(a["vector"], dtype=np.float32) @ np.frombuffer(b["vector"], dtype=np.float32))
-
-
 def find_blurry(threshold: float = DEFAULT_BLUR_THRESHOLD) -> list[dict]:
+    # Very dark photos always have weak edges, so they'd look "blurry" too. They're listed under
+    # "Too dark" instead, so leave them out here.
     with connect() as conn:
         rows = conn.execute(
             f"""
             SELECT {IMAGE_COLUMNS} FROM images i JOIN image_quality q ON q.image_id = i.id
             WHERE q.ignored = 0 AND q.sharpness IS NOT NULL AND q.sharpness < ?
+              AND COALESCE(q.brightness, 255) >= ?
             ORDER BY q.sharpness
             """,
-            (threshold,),
+            (threshold, DEFAULT_DARK_THRESHOLD),
         ).fetchall()
     return _items(rows)
 
@@ -160,9 +158,10 @@ def find_dark(threshold: float = DEFAULT_DARK_THRESHOLD) -> list[dict]:
             f"""
             SELECT {IMAGE_COLUMNS} FROM images i JOIN image_quality q ON q.image_id = i.id
             WHERE q.ignored = 0 AND q.brightness IS NOT NULL AND q.brightness < ?
+              AND COALESCE(q.highlights, 0) < ?
             ORDER BY q.brightness
             """,
-            (threshold,),
+            (threshold, DARK_MAX_HIGHLIGHTS),
         ).fetchall()
     return _items(rows)
 

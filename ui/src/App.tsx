@@ -6,6 +6,9 @@ import PhotoGrid from "./components/PhotoGrid";
 import Lightbox from "./components/Lightbox";
 import OrganizeDialog from "./components/OrganizeDialog";
 import ExportDialog from "./components/ExportDialog";
+import SearchBar from "./components/SearchBar";
+import CleanupView from "./components/CleanupView";
+import AnalysisBanner from "./components/AnalysisBanner";
 import Modal, { GhostButton, PrimaryButton } from "./components/Modal";
 
 const PAGE = 200;
@@ -38,15 +41,23 @@ export default function App() {
   }, []);
 
   const loadImages = useCallback(async (v: View) => {
+    if (v.type === "cleanup") return; // Cleanup loads its own data
+    if (v.type === "search") {
+      // Don't show the previous view's count while a search is running.
+      setImages([]);
+      setTotal(0);
+    }
     setLoading(true);
     try {
-      const res = await api.images(v, 0, PAGE);
+      const res = v.type === "search" ? await api.search(v.q) : await api.images(v, 0, PAGE);
       setImages(res.items);
-      setTotal(res.total);
+      setTotal(v.type === "search" ? res.items.length : (res as { total: number }).total);
+    } catch (e) {
+      notify((e as Error).message, true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [notify]);
 
   /** Reload everything that may have changed, keeping the current view. */
   const refresh = useCallback(async () => {
@@ -176,7 +187,13 @@ export default function App() {
   const title =
     view.type === "all" ? "All photos"
     : view.type === "unsorted" ? "Unsorted"
+    : view.type === "search" ? `“${view.q}”`
+    : view.type === "cleanup" ? "Cleanup"
     : currentAlbum?.name ?? currentFolder?.path.split(/[\\/]/).pop() ?? "";
+  const subtitle =
+    view.type === "search" ? `${total.toLocaleString()} matching photo${total === 1 ? "" : "s"}, best matches first`
+    : view.type === "cleanup" ? "Find duplicates, blurry and dark photos. Nothing is deleted without asking"
+    : `${total.toLocaleString()} photo${total === 1 ? "" : "s"}`;
 
   return (
     <div className="flex h-full">
@@ -203,12 +220,19 @@ export default function App() {
               <h2 className="truncate font-display text-2xl font-semibold">{title}</h2>
             )}
             <p className="mt-0.5 truncate text-sm text-ink-400">
-              {total.toLocaleString()} photo{total === 1 ? "" : "s"}
+              {subtitle}
               {currentFolder && <span className="ml-2 text-ink-600">{currentFolder.path}</span>}
               {view.type === "unsorted" && <span className="ml-2 text-ink-600">Photos not in any album</span>}
               {currentAlbum && <span className="ml-2 text-ink-600">Drag photos onto an album in the sidebar to move them</span>}
             </p>
           </div>
+          {folders.length > 0 && (
+            <SearchBar
+              value={view.type === "search" ? view.q : ""}
+              onSearch={(q) => setView({ type: "search", q })}
+              onClear={() => view.type === "search" && setView({ type: "all" })}
+            />
+          )}
           {currentAlbum && (
             <GhostButton onClick={() => deleteAlbum(currentAlbum.id)} title="Delete album (photos go to Unsorted)">
               <Trash2 className="size-4" />
@@ -222,7 +246,10 @@ export default function App() {
         </header>
 
         <div className="p-8">
-          {loading || engineOk === null ? (
+          {view.type === "search" && <AnalysisBanner what="search results" onDone={() => loadImages(view)} />}
+          {view.type === "cleanup" ? (
+            <CleanupView notify={notify} onChanged={() => Promise.all([loadFolders(), loadAlbums()])} />
+          ) : loading || engineOk === null ? (
             <div className="flex justify-center py-24 text-ink-400">
               <Loader2 className="size-6 animate-spin" />
             </div>
@@ -368,6 +395,7 @@ function EmptyState({ view, hasFolders }: { view: View; hasFolders: boolean }) {
     !hasFolders ? ["Your library is empty", "Paste a folder path in the sidebar to start. SORTIFIED only reads your photos. It never changes them without asking."]
     : view.type === "album" ? ["This album is empty", "Drag photos onto it in the sidebar, or select photos and use “Move to album”."]
     : view.type === "unsorted" ? ["Everything is sorted 🎉", "Every photo is in an album."]
+    : view.type === "search" ? ["No matches", "Try describing it differently, e.g. “people smiling outdoors” or “handwritten notes”."]
     : ["No photos here", "This folder has no supported images (JPG, PNG, WEBP, HEIC…)."];
   return (
     <div className="flex flex-col items-center py-24 text-center">
